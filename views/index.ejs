@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/stylesheets/style.css">
+</head>
+<body>
+
+  <h1><%= title %></h1>
+  <p>Bem-vindo ao sistema NPS Claro</p>
+
+  <!-- Indicador de status do banco -->
+  <div class="db-status">
+    <span class="status-dot <%= dbStatus.connected ? 'connected' : 'disconnected' %>"></span>
+    <span>PostgreSQL: <strong><%= dbStatus.connected ? 'Conectado' : 'Desconectado' %></strong></span>
+    <small><%= dbStatus.message %></small>
+  </div>
+
+  <!-- Botões de consulta -->
+  <div class="btn-group">
+    <button id="btn-schemas" class="btn" <%= !dbStatus.connected ? 'disabled' : '' %>>
+      📁 Schemas e Tabelas
+    </button>
+    <button id="btn-procedures" class="btn btn-secondary" <%= !dbStatus.connected ? 'disabled' : '' %>>
+      ⚙️ Procedures
+    </button>
+    <button id="btn-functions" class="btn btn-secondary" <%= !dbStatus.connected ? 'disabled' : '' %>>
+      🔧 Functions
+    </button>
+  </div>
+
+  <!-- Áreas de resultado -->
+  <div id="schemas-result" class="query-result" style="display:none;"></div>
+  <div id="procedures-result" class="query-result" style="display:none;"></div>
+  <div id="functions-result" class="query-result" style="display:none;"></div>
+
+  <script>
+    // Função genérica de consulta
+    async function queryEndpoint(btn, endpoint, resultId, label, renderFn) {
+      const resultDiv = document.getElementById(resultId);
+      const originalText = btn.textContent;
+
+      // Esconde todos os resultados
+      document.querySelectorAll('.query-result').forEach(function (el) { el.style.display = 'none'; });
+
+      btn.disabled = true;
+      btn.textContent = 'Consultando...';
+
+      try {
+        const res = await fetch(endpoint);
+        const data = await res.json();
+
+        if (!data.success) {
+          resultDiv.innerHTML = '<p class="error">Erro: ' + data.message + '</p>';
+        } else {
+          resultDiv.innerHTML = renderFn(data.schemas);
+        }
+        resultDiv.style.display = 'block';
+      } catch (err) {
+        resultDiv.innerHTML = '<p class="error">Erro na requisição: ' + err.message + '</p>';
+        resultDiv.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }
+
+    // Render: tabelas (2 colunas — nome + tipo)
+    function renderTables(schemas) {
+      var html = '';
+      for (var schema in schemas) {
+        html += '<div class="schema-block">';
+        html += '<h3>📁 ' + schema + '</h3>';
+        html += '<table><thead><tr><th>Tabela</th><th>Tipo</th></tr></thead><tbody>';
+        schemas[schema].forEach(function (t) {
+          html += '<tr><td>' + t.name + '</td><td>' + t.type + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      return html || '<p class="empty">Nenhuma tabela encontrada.</p>';
+    }
+
+    // Render: lista simples (procedures / functions)
+    function renderRoutines(schemas, icon) {
+      var html = '';
+      for (var schema in schemas) {
+        html += '<div class="schema-block">';
+        html += '<h3>📁 ' + schema + '</h3>';
+        html += '<table><thead><tr><th>' + icon + ' Nome</th></tr></thead><tbody>';
+        schemas[schema].forEach(function (name) {
+          html += '<tr><td>' + name + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      return html || '<p class="empty">Nenhum registro encontrado.</p>';
+    }
+
+    // Event listeners
+    document.getElementById('btn-schemas').addEventListener('click', function () {
+      queryEndpoint(this, '/schemas', 'schemas-result', 'Schemas e Tabelas', renderTables);
+    });
+
+    document.getElementById('btn-procedures').addEventListener('click', function () {
+      queryEndpoint(this, '/procedures', 'procedures-result', 'Procedures', function (s) {
+        return renderRoutines(s, '⚙️');
+      });
+    });
+
+    document.getElementById('btn-functions').addEventListener('click', function () {
+      queryEndpoint(this, '/functions', 'functions-result', 'Functions', function (s) {
+        return renderRoutines(s, '🔧');
+      });
+    });
+  </script>
+
+</body>
+</html>
+
