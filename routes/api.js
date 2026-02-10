@@ -176,10 +176,82 @@ router.get('/produto', async (req, res) => {
           categoria: "",
         }
         let element = result.rows[index];
-        base.id = parseInt(element.plan_id,36);
+        base.id = element.plan_id;
         base.nome = element.plan_name;
         base.categoria = element.plan_type;
         resp.push(base);
+      }
+    }
+    return formatResponse(res, { sucesso: true, mensagem: 'Função executada com sucesso', procedure: funcName, resultado: resp || [], registrosAfetados: result.rowCount ?? 0, tempoMs: Date.now() - start });
+  } catch (err) {
+    return res.status(500).json({ sucesso: false, mensagem: `Erro ao executar: ${err.message}`, procedure: funcName, dados: null });
+  }
+});
+
+router.get('/metricasglobais', async (req, res) => {
+  const funcName = routineRegistry.resolve('function', 'fc_metricasglobais');
+  if (!isValidIdentifier(funcName)) return formatValidationError(res, 'Nome de função inválido.', funcName);
+  let values = [];
+  const sql = `SELECT * FROM ${funcName}()`;
+  const start = Date.now();
+  try {
+    const result = await pool.query(sql, values);
+    //aqui vai a magia da query
+    let resp = []
+    if(result.rows.length > 0){
+      for (let index = 0; index < result.rows.length; index++) {
+        let base = {
+            total_clientes: 0,
+            total_respondidos: 0,
+            total_calculados: 0,
+            nps_score: 0,
+            promotores: { quantidade: 0, percentual: 0 },
+            neutros: { quantidade: 0, percentual: 0},
+            detratores: { quantidade: 0, percentual: 0 },
+        }
+
+        let element = result.rows[index];
+        let elementNum = Object.fromEntries(
+          Object.entries(element).map(([key, value]) => {
+            const num = parseFloat(value);
+            return [key, isNaN(num) ? value : num];
+          })
+        );
+        base.total_clientes = elementNum.total_clientes;
+        base.total_respondidos = elementNum.total_respondidos;
+        base.total_calculados = elementNum.total_calculados;
+        base.nps_score = elementNum.nps_score;
+        base.promotores.quantidade = elementNum.promotores_quantidade;
+        base.promotores.percentual = elementNum.promotores_percentual;
+        base.neutros.quantidade = elementNum.neutros_quantidade;  
+        base.neutros.percentual = elementNum.neutros_percentual;
+        base.detratores.quantidade = elementNum.detratores_quantidade;
+        base.detratores.percentual = elementNum.detratores_percentual;         
+        resp.push(base);
+      }
+    }
+    return formatResponse(res, { sucesso: true, mensagem: 'Função executada com sucesso', procedure: funcName, resultado: resp || [], registrosAfetados: result.rowCount ?? 0, tempoMs: Date.now() - start });
+  } catch (err) {
+    return res.status(500).json({ sucesso: false, mensagem: `Erro ao executar: ${err.message}`, procedure: funcName, dados: null });
+  }
+});
+
+router.get('/comparativonpstrue', async (req, res) => {
+  const funcName = routineRegistry.resolve('function', 'fc_comparativonps_true');
+  if (!isValidIdentifier(funcName)) return formatValidationError(res, 'Nome de função inválido.', funcName);
+  let values = [];
+  const sql = `SELECT * FROM ${funcName}()`;
+  const start = Date.now();
+  try {
+    const result = await pool.query(sql, values);
+    //aqui vai a magia da query
+    let resp = []
+    if(result.rows.length > 0){
+      for (let index = 0; index < result.rows.length; index++) {
+
+        let element = result.rows[index];
+    
+        resp.push(element);
       }
     }
     return formatResponse(res, { sucesso: true, mensagem: 'Função executada com sucesso', procedure: funcName, resultado: resp || [], registrosAfetados: result.rowCount ?? 0, tempoMs: Date.now() - start });
