@@ -165,12 +165,13 @@ function ajustahistoricoComparativo(nps_score, historicoNps, arrayaux1, arrayaux
     },
     evolucao_nps: []
   }
+  let percentual = totalRespondido/(totalRespondido+totalCalculado);
   for (let index = 0; index < historicoNps.length; index++) {
     const element = historicoNps[index];
     let base = { mes: "", respondido: 0, calculado: 0 }
     base.mes = element.mes;
-    base.respondido = nps_score+element.nps;
-    base.calculado = nps_score+element.nps;
+    base.respondido = (nps_score+element.nps)*percentual;
+    base.calculado = (nps_score+element.nps)*(1-percentual);
     retorno.evolucao_nps.push(base);
   }
   return retorno;
