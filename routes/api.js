@@ -96,7 +96,6 @@ function ajustahistoricoSatisfacaoBreakdown(driversBreakdown) {
     }
     arrayAux.push(base);
   }
-  console.log(arrayAux);
   return arrayAux;
 }
 
@@ -222,6 +221,14 @@ router.get('/cliente', async (req, res) => {
           produtos: [],
           data_cadastro: "",
           endereco: "",
+          support_count: "",
+          support_handle_time_avg: "",
+          network_latency_avg: "",
+          marketing_open_rate: "",
+          plan_name: "",
+          count_interactions: "",
+          favorite_channel: "",
+          digital_engagement: "",
         }
         let element = result.rows[index];
         base.id = parseInt(element.customer_id,36);
@@ -235,6 +242,15 @@ router.get('/cliente', async (req, res) => {
         base.produtos[0] = element.plan_name;
         base.data_cadastro = element.account_open_date;
         base.endereco = 'R. Fidêncio Ramos, 101 - São Paulo - SP';
+        base.support_count = element.support_count;
+        base.support_handle_time_avg  = element.support_handle_time_avg;
+        base.network_latency_avg = element.network_latency_avg;
+        base.marketing_open_rate = element.marketing_open_rate;
+        base.plan_name = element.plan_name;
+        base.count_interactions = element.count_interactions;
+        base.favorite_channel = element.favorite_channel;
+        base.digital_engagement = element.digital_engagement;   
+
         resp.push(base);
       }
     }
@@ -385,7 +401,7 @@ router.get('/metricasporproduto', async (req, res) => {
   const start = Date.now();
   try {
     const resultaux1 = await pool.query(sqlaux1, values);
-    let arrayaux1 = [];
+    const arrayaux1 = [];
     if(resultaux1.rows.length > 0){
       for (let index = 0; index < resultaux1.rows.length; index++) {
         let element = resultaux1.rows[index];
@@ -393,7 +409,7 @@ router.get('/metricasporproduto', async (req, res) => {
       }
     }
     const resultaux2 = await pool.query(sqlaux2, values);
-    let arrayaux2 = [];
+    const arrayaux2 = [];
     if(resultaux2.rows.length > 0){
       for (let index = 0; index < resultaux2.rows.length; index++) {
         let element = resultaux2.rows[index];
@@ -401,26 +417,27 @@ router.get('/metricasporproduto', async (req, res) => {
       }
     }
     const result = await pool.query(sql, values);
-    let base = {
-        nps_score: 0,
-        csat_score: 0,
-        csat_mes_anterior: 0,
-        ces_score: 0,
-        tempo_medio_resposta: "",
-        tempo_mes_anterior: "",
-        total_clientes: 0,
-        promotores: { percentual: 0, quantidade: 0 },
-        neutros: { percentual: 0, quantidade: 0 },
-        detratores: { percentual: 0, quantidade: 0 },
-        evolucao_mensal: [],
-        tempo_resposta_mensal: null,
-        satisfacao_breakdown: null,
-        comparativo: null,
-    }
+
     let arrayAux = [];
     let resp = []
     if(result.rows.length > 0){
       for (let index = 0; index < result.rows.length; index++) {
+        let base = {
+          nps_score: 0,
+          csat_score: 0,
+          csat_mes_anterior: 0,
+          ces_score: 0,
+          tempo_medio_resposta: "",
+          tempo_mes_anterior: "",
+          total_clientes: 0,
+          promotores: { percentual: 0, quantidade: 0 },
+          neutros: { percentual: 0, quantidade: 0 },
+          detratores: { percentual: 0, quantidade: 0 },
+          evolucao_mensal: [],
+          tempo_resposta_mensal: null,
+          satisfacao_breakdown: null,
+          comparativo: null,
+        }
         let element = result.rows[index];
         base.nps_score = element.resultado.nps_score;
         base.tempo_medio_resposta = element.resultado.tempo_medio_resposta;
@@ -436,11 +453,13 @@ router.get('/metricasporproduto', async (req, res) => {
         base.satisfacao_breakdown = ajustahistoricoSatisfacaoBreakdown(element.resultado.drivers_breakdown);
         base.comparativo = ajustahistoricoComparativo(element.resultado.nps_score, element.resultado.historico_nps, arrayaux1, arrayaux2);
         arrayAux.push([element.plan_id,base]);
+        console.log("element.resultado");
+         console.log(element.resultado.nps_score);
       }
       let objAux = Object.fromEntries(arrayAux);
       resp.push(objAux);
     }
-    return formatResponse(res, { sucesso: true, mensagem: 'Função executada com sucesso', procedure: funcName, resultado: resp || [], registrosAfetados: result.rowCount ?? 0, tempoMs: Date.now() - start });
+    return formatResponse(res, { sucesso: true, mensagem: 'Função executada com sucesso', procedure: funcName, resultado: resp[0] || [], registrosAfetados: result.rowCount ?? 0, tempoMs: Date.now() - start });
   } catch (err) {
     return res.status(500).json({ sucesso: false, mensagem: `Erro ao executar: ${err.message}`, procedure: funcName, dados: null });
   }
