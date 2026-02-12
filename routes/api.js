@@ -6,14 +6,16 @@ const routineRegistry = require('../config/routineRegistry');
 // ============================================================
 // Middleware de resposta padronizada
 // ============================================================
-function formatResponse(res, { sucesso, mensagem, procedure, resultado, registrosAfetados, tempoMs }) {
+function formatResponse(res, { sucesso, mensagem, procedure, resultado, registrosAfetados, tempoMs, aviso }) {
   const status = sucesso ? 200 : 500;
-  return res.status(status).json({
+  const body = {
     sucesso,
     mensagem,
     procedure,
     dados: sucesso ? { resultado, registrosAfetados, tempoMs } : null,
-  });
+  };
+  if (aviso) body.aviso = aviso;
+  return res.status(status).json(body);
 }
 
 function formatValidationError(res, mensagem, procedure) {
@@ -100,7 +102,18 @@ function ajustahistoricoSatisfacaoBreakdown(driversBreakdown) {
 }
 
 
-function ajustahistoricoComparativo(nps_score, historicoNps, arrayaux1, arrayaux2) { 
+function ajustahistoricoComparativo(nps_score, historicoNps, arrayaux1, arrayaux2) {
+  // Helper: converte para número seguro — null, undefined, NaN viram 0
+  const avisos = [];
+  function safeNum(value, campo) {
+    const num = Number(value);
+    if (value === null || value === undefined || isNaN(num)) {
+      avisos.push(campo);
+      return 0;
+    }
+    return num;
+  }
+
   let detratoresRespondidoPorcentagem = 0;
   let neutrosRespondidoPorcentagem = 0;
   let promotoresRespondidoPorcentagem = 0;
@@ -118,46 +131,49 @@ function ajustahistoricoComparativo(nps_score, historicoNps, arrayaux1, arrayaux
 
   for (let index = 0; index < arrayaux1.length; index++) {
     let element = arrayaux1[index];
-    totalRespondido = totalRespondido + Number(element.quantidade);
+    totalRespondido = totalRespondido + safeNum(element.quantidade, `arrayaux1[${index}].quantidade`);
     if(element.nps_category === 'detrator'){
-      detratoresRespondidoPorcentagem = Number(element.porcentagem);
-      detratoresRespondidoQuantidade = Number(element.quantidade);
+      detratoresRespondidoPorcentagem = safeNum(element.porcentagem, `respondido.detratores.porcentagem`);
+      detratoresRespondidoQuantidade = safeNum(element.quantidade, `respondido.detratores.quantidade`);
     }
     if(element.nps_category === 'neutro'){
-      neutrosRespondidoPorcentagem = Number(element.porcentagem);
-      neutrosRespondidoQuantidade = Number(element.quantidade);
+      neutrosRespondidoPorcentagem = safeNum(element.porcentagem, `respondido.neutros.porcentagem`);
+      neutrosRespondidoQuantidade = safeNum(element.quantidade, `respondido.neutros.quantidade`);
     }
     if(element.nps_category === 'promotor'){
-      promotoresRespondidoPorcentagem = Number(element.porcentagem);
-      promotoresRespondidoQuantidade = Number(element.quantidade);
+      promotoresRespondidoPorcentagem = safeNum(element.porcentagem, `respondido.promotores.porcentagem`);
+      promotoresRespondidoQuantidade = safeNum(element.quantidade, `respondido.promotores.quantidade`);
     }
   }
   for (let index = 0; index < arrayaux2.length; index++) {
     let element = arrayaux2[index];
-    totalCalculado = totalCalculado + Number(element.quantidade);
+    totalCalculado = totalCalculado + safeNum(element.quantidade, `arrayaux2[${index}].quantidade`);
     if(element.nps_category === 'detrator'){
-      detratoresCalculadoPorcentagem = Number(element.porcentagem);
-      detratoresCalculadoQuantidade = Number(element.quantidade);
+      detratoresCalculadoPorcentagem = safeNum(element.porcentagem, `calculado.detratores.porcentagem`);
+      detratoresCalculadoQuantidade = safeNum(element.quantidade, `calculado.detratores.quantidade`);
     }
     if(element.nps_category === 'neutro'){
-      neutrosCalculadoPorcentagem = Number(element.porcentagem);
-      neutrosCalculadoQuantidade = Number(element.quantidade);
+      neutrosCalculadoPorcentagem = safeNum(element.porcentagem, `calculado.neutros.porcentagem`);
+      neutrosCalculadoQuantidade = safeNum(element.quantidade, `calculado.neutros.quantidade`);
     }
     if(element.nps_category === 'promotor'){
-      promotoresCalculadoPorcentagem = Number(element.porcentagem);
-      promotoresCalculadoQuantidade = Number(element.quantidade);
+      promotoresCalculadoPorcentagem = safeNum(element.porcentagem, `calculado.promotores.porcentagem`);
+      promotoresCalculadoQuantidade = safeNum(element.quantidade, `calculado.promotores.quantidade`);
     }
   }
+
+  const safeNpsScore = safeNum(nps_score, 'nps_score');
+
   let retorno = {
     nps_respondido: {
-      score: nps_score,
+      score: safeNpsScore,
       total_clientes: totalRespondido,
       promotores: { percentual: promotoresRespondidoPorcentagem, quantidade: promotoresRespondidoQuantidade },
       neutros: { percentual: neutrosRespondidoPorcentagem, quantidade: neutrosRespondidoQuantidade },
       detratores: { percentual: detratoresRespondidoPorcentagem, quantidade: detratoresRespondidoQuantidade },
     },
     nps_calculado: {
-      score: nps_score,
+      score: safeNpsScore,
       total_clientes: totalCalculado,
       promotores: { percentual: promotoresCalculadoPorcentagem, quantidade: promotoresCalculadoQuantidade },
       neutros: { percentual: neutrosCalculadoPorcentagem, quantidade: neutrosCalculadoQuantidade },
@@ -165,15 +181,23 @@ function ajustahistoricoComparativo(nps_score, historicoNps, arrayaux1, arrayaux
     },
     evolucao_nps: []
   }
-  let percentual = totalRespondido/(totalRespondido+totalCalculado);
+
+  const soma = totalRespondido + totalCalculado;
+  let percentual = soma > 0 ? totalRespondido / soma : 0;
   for (let index = 0; index < historicoNps.length; index++) {
     const element = historicoNps[index];
+    const npsVal = safeNum(element.nps, `historicoNps[${index}].nps`);
     let base = { mes: "", respondido: 0, calculado: 0 }
-    base.mes = element.mes;
-    base.respondido = (nps_score+element.nps)*percentual;
-    base.calculado = (nps_score+element.nps)*(1-percentual);
+    base.mes = element.mes || "";
+    base.respondido = (safeNpsScore + npsVal) * percentual;
+    base.calculado = (safeNpsScore + npsVal) * (1 - percentual);
     retorno.evolucao_nps.push(base);
   }
+
+  // Deduplica avisos e monta string resumo
+  const uniqueAvisos = [...new Set(avisos)];
+  retorno._avisos = uniqueAvisos;
+
   return retorno;
 }
 
@@ -420,6 +444,7 @@ router.get('/metricasporproduto', async (req, res) => {
     const result = await pool.query(sql, values);
 
     let arrayAux = [];
+    let todosAvisos = [];
     let resp = []
     if(result.rows.length > 0){
       for (let index = 0; index < result.rows.length; index++) {
@@ -452,15 +477,23 @@ router.get('/metricasporproduto', async (req, res) => {
         base.evolucao_mensal = ajustahistoricoNps(element.resultado.historico_nps);
         base.tempo_resposta_mensal = ajustahistoricoTempoResposta(element.resultado.historico_nps,element.resultado.tempo_medio_resposta);
         base.satisfacao_breakdown = ajustahistoricoSatisfacaoBreakdown(element.resultado.drivers_breakdown);
-        base.comparativo = ajustahistoricoComparativo(element.resultado.nps_score, element.resultado.historico_nps, arrayaux1, arrayaux2);
+        const comparativoResult = ajustahistoricoComparativo(element.resultado.nps_score, element.resultado.historico_nps, arrayaux1, arrayaux2);
+        // Extrai avisos e remove do objeto de dados
+        const { _avisos, ...comparativoData } = comparativoResult;
+        if (_avisos && _avisos.length > 0) {
+          todosAvisos.push(..._avisos.map(a => `[${element.plan_id}] ${a}`));
+        }
+        base.comparativo = comparativoData;
         arrayAux.push([element.plan_id,base]);
-        console.log("element.resultado");
-         console.log(element.resultado.nps_score);
       }
       let objAux = Object.fromEntries(arrayAux);
       resp.push(objAux);
     }
-    return formatResponse(res, { sucesso: true, mensagem: 'Função executada com sucesso', procedure: funcName, resultado: resp[0] || [], registrosAfetados: result.rowCount ?? 0, tempoMs: Date.now() - start });
+    const aviso = todosAvisos.length > 0
+      ? `${todosAvisos.length} valor(es) nulo(s) ou inválido(s) foram substituídos por 0: ${[...new Set(todosAvisos)].join(', ')}`
+      : undefined;
+    console.log('[DEBUG metricasporproduto] todosAvisos:', todosAvisos.length, '| aviso:', aviso ? aviso.substring(0, 100) : 'nenhum');
+    return formatResponse(res, { sucesso: true, mensagem: 'Função executada com sucesso', procedure: funcName, resultado: resp[0] || [], registrosAfetados: result.rowCount ?? 0, tempoMs: Date.now() - start, aviso });
   } catch (err) {
     return res.status(500).json({ sucesso: false, mensagem: `Erro ao executar: ${err.message}`, procedure: funcName, dados: null });
   }
